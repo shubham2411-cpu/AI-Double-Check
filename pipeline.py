@@ -222,16 +222,18 @@ def run_tests():
 # PROGRAM START
 # ============================================================
 
-if MODE == "mock":
+if __name__ == "__main__":
 
-    run_tests()
+    if MODE == "mock":
 
-elif MODE == "gemini":
+        run_tests()
 
-    question = input("\nEnter your question: ")
+    elif MODE == "gemini":
 
-    result = run_pipeline(question)
+        question = input("\nEnter your question: ")
 
-else:
+        result = run_pipeline(question)
 
-    raise ValueError("Invalid mode. Use 'mock' or 'gemini'.")
+    else:
+
+        raise ValueError("Invalid mode. Use 'mock' or 'gemini'.")
