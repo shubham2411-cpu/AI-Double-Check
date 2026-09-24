@@ -1,15 +1,30 @@
 from dotenv import load_dotenv
 from google import genai
 import time
+import json
+import re
+import math
+from dataclasses import dataclass
 
 
 # ============================================================
-# GEMINI SETUP
+# CONFIGURATION
 # ============================================================
 
 load_dotenv()
 
 client = genai.Client()
+
+
+# ============================================================
+# STRUCTURED VERIFIER RESULT
+# ============================================================
+
+@dataclass
+class VerifierResult:
+    verdict: str          # "PASS" or "FAIL"
+    confidence: float     # numeric, 0.0 .. 1.0
+    explanation: str      # non-empty short rationale
 
 
 # ============================================================
@@ -22,35 +37,31 @@ def ask_gemini(prompt):
 
         try:
 
-            response = client.interactions.create(
+            response = client.models.generate_content(
                 model="gemini-3.8-flash",
-                input=prompt
+                contents=prompt
             )
 
-            return response.output_text
+            return response.text
 
         except Exception as e:
 
             error_text = str(e)
 
-            if (
-                "503" in error_text
-                or "service_unavailable" in error_text
-            ):
+            if "503" in error_text:
 
-                print(
-                    f"\nGemini temporarily unavailable. "
-                    f"Retrying... ({attempt + 1}/3)"
-                )
+                if attempt < 2:
 
-                time.sleep(5)
+                    print(
+                        f"Gemini temporarily unavailable. "
+                        f"Retrying... ({attempt + 1}/3)"
+                    )
 
-            else:
-                raise
+                    time.sleep(2)
 
-    raise RuntimeError(
-        "Gemini is still unavailable after 3 attempts."
-    )
+                    continue
+
+            raise
 
 
 # ============================================================
@@ -62,14 +73,16 @@ def solve(question):
     return ask_gemini(f"""
 You are the Solver in an AI verification system.
 
-Solve the user's question carefully and logically.
+Solve the user's question carefully.
 
-Show the necessary reasoning and calculations.
-
-Do not intentionally make mistakes.
+Show your reasoning clearly.
+State assumptions when necessary.
+Check calculations, equations, units, and important details.
 
 User question:
 {question}
+
+Provide a complete answer.
 """)
 
 
@@ -77,58 +90,225 @@ User question:
 # VERIFIER
 # ============================================================
 
+_JSON_OBJECT_RE = re.compile(r"\{.*\}", re.DOTALL)
+
+
+def _parse_verifier_output(text):
+    """
+    Parse the Verifier's raw text into a VerifierResult.
+
+    Expects a single JSON object with keys:
+        verdict, confidence, explanation
+
+    Raises ValueError with a descriptive message on any failure.
+    """
+
+    if text is None:
+
+        raise ValueError(
+            "Verifier returned no text."
+        )
+
+    match = _JSON_OBJECT_RE.search(text)
+
+    if not match:
+
+        raise ValueError(
+            f"Verifier did not return a JSON object. Raw output: {text!r}"
+        )
+
+    raw_json = match.group(0)
+
+    try:
+
+        obj = json.loads(raw_json)
+
+    except json.JSONDecodeError as e:
+
+        raise ValueError(
+            f"Verifier output was not valid JSON: "
+            f"{raw_json!r} ({e})"
+        )
+
+    if not isinstance(obj, dict):
+
+        raise ValueError(
+            f"Verifier output JSON must be an object, "
+            f"got {type(obj).__name__}."
+        )
+
+    # ---- exact key set: verdict, confidence, explanation ----
+
+    required_keys = (
+        "verdict",
+        "confidence",
+        "explanation"
+    )
+
+    missing_keys = [
+        k for k in required_keys
+        if k not in obj
+    ]
+
+    if missing_keys:
+
+        raise ValueError(
+            f"Verifier output JSON is missing required key(s): "
+            f"{missing_keys}."
+        )
+
+    extra_keys = [
+        k for k in obj
+        if k not in required_keys
+    ]
+
+    if extra_keys:
+
+        raise ValueError(
+            f"Verifier output JSON contains unexpected key(s): "
+            f"{extra_keys}. Allowed keys are exactly: "
+            f"{list(required_keys)}."
+        )
+
+    # ---- verdict: exactly PASS or FAIL ----
+
+    raw_verdict = obj.get("verdict")
+
+    if not isinstance(raw_verdict, str):
+
+        raise ValueError(
+            f"Verifier 'verdict' must be a string, got "
+            f"{type(raw_verdict).__name__}: {raw_verdict!r}."
+        )
+
+    verdict = raw_verdict.strip().upper()
+
+    if verdict not in ("PASS", "FAIL"):
+
+        raise ValueError(
+            f"Verifier 'verdict' must be exactly 'PASS' or 'FAIL', "
+            f"got {raw_verdict!r}."
+        )
+
+    # ---- confidence: numeric, strictly in [0.0, 1.0] ----
+
+    raw_confidence = obj.get("confidence")
+
+    # bool is a subclass of int in Python; reject it explicitly.
+
+    if isinstance(raw_confidence, bool) or not isinstance(
+        raw_confidence,
+        (int, float)
+    ):
+
+        raise ValueError(
+            f"Verifier 'confidence' must be numeric, got "
+            f"{type(raw_confidence).__name__}: {raw_confidence!r}."
+        )
+
+    confidence = float(raw_confidence)
+
+    if not math.isfinite(confidence):
+
+        raise ValueError(
+            f"Verifier 'confidence' must be a finite number, "
+            f"got {confidence}."
+        )
+
+    if confidence < 0.0 or confidence > 1.0:
+
+        raise ValueError(
+            f"Verifier 'confidence' must be between 0.0 and 1.0 "
+            f"inclusive, got {confidence}."
+        )
+
+    # ---- explanation: non-empty string ----
+
+    raw_explanation = obj.get("explanation")
+
+    if not isinstance(raw_explanation, str):
+
+        raise ValueError(
+            f"Verifier 'explanation' must be a string, got "
+            f"{type(raw_explanation).__name__}: {raw_explanation!r}."
+        )
+
+    explanation = raw_explanation.strip()
+
+    if not explanation:
+
+        raise ValueError(
+            "Verifier 'explanation' must be a non-empty string."
+        )
+
+    return VerifierResult(
+        verdict=verdict,
+        confidence=confidence,
+        explanation=explanation,
+    )
+
+
 def verify(question, solver_answer):
 
-    return ask_gemini(f"""
+    raw_output = ask_gemini(f"""
 You are the Verifier in an AI verification system.
 
 Independently check the Solver's answer.
 
-Check:
+Respond with a single JSON object and nothing else, using exactly
+these three fields:
 
-1. Is the answer correct?
-2. Is the reasoning correct?
-3. Are there calculation errors?
-4. Are important details or assumptions missing?
-5. Are the equations and units correct?
+  "verdict":     the string "PASS" or the string "FAIL"
+  "confidence":  a number between 0.0 and 1.0 (inclusive) expressing
+                 how confident you are in the verdict
+  "explanation": one short sentence (under 30 words) explaining the verdict
 
-Do NOT blindly trust the Solver.
+Do not include any prose, markdown, or code fences outside the JSON object.
 
 User question:
 {question}
 
 Solver's answer:
 {solver_answer}
-
-Give your verdict as PASS or FAIL, followed by a concise explanation.
 """)
+
+    try:
+
+        return _parse_verifier_output(raw_output)
+
+    except ValueError as e:
+
+        raise RuntimeError(
+            f"Failed to parse Verifier output into structured result: {e}"
+        ) from e
 
 
 # ============================================================
 # CRITIC
 # ============================================================
 
+def _format_verifier(verification):
+
+    """Render a VerifierResult as a labeled block for downstream prompts."""
+
+    return (
+        f"Verdict: {verification.verdict}\n"
+        f"Confidence: {verification.confidence:.2f}\n"
+        f"Explanation: {verification.explanation}"
+    )
+
+
 def criticize(question, solver_answer, verification):
+
+    verification_text = _format_verifier(verification)
 
     return ask_gemini(f"""
 You are the Critic in an AI verification system.
 
-Your job is to critically examine the Solver's answer
-and the Verifier's assessment.
+Review the Solver's answer and the Verifier's assessment.
 
-Look for:
-
-1. Incorrect reasoning
-2. Calculation errors
-3. Incorrect equations
-4. Unit errors
-5. Missing information
-6. Hidden assumptions
-7. Ambiguity
-8. Problems the Verifier may have missed
-
-Do not criticize something merely because you would phrase
-it differently.
+Identify any remaining problems, missing reasoning, incorrect
+assumptions, calculation errors, or weaknesses.
 
 User question:
 {question}
@@ -137,13 +317,9 @@ Solver's answer:
 {solver_answer}
 
 Verifier's assessment:
-{verification}
+{verification_text}
 
 Give a concise critique.
-
-If there is no meaningful problem, say:
-
-NO SIGNIFICANT ISSUES
 """)
 
 
@@ -158,79 +334,82 @@ def finalize(
     critique
 ):
 
+    verification_text = _format_verifier(verification)
+
     return ask_gemini(f"""
 You are the Finalizer in an AI verification system.
 
-Produce the final answer for the user.
+Produce the final answer to the user's question.
 
-You have:
+Use the Solver's answer as the starting point, but incorporate
+the Verifier's assessment and the Critic's analysis.
 
-- Original question
-- Solver's answer
-- Verifier's assessment
-- Critic's analysis
+Correct any errors identified during verification.
 
-Rules:
+Do not mention the internal verification process unless necessary.
 
-1. Do not blindly trust the Solver.
-2. Correct the Solver if necessary.
-3. Consider the Verifier's assessment.
-4. Consider the Critic's concerns.
-5. Give a clear and accurate final answer.
-6. Include appropriate calculations and units when needed.
-7. Do not mention the internal AI agents unless necessary.
-
-Original question:
+User question:
 {question}
 
 Solver's answer:
 {solver_answer}
 
 Verifier's assessment:
-{verification}
+{verification_text}
 
 Critic's analysis:
 {critique}
 
-Now produce the final answer.
+Return the final answer clearly and accurately.
 """)
 
 
 # ============================================================
-# GEMINI PIPELINE
+# FULL GEMINI PIPELINE
 # ============================================================
 
 def run_gemini_pipeline(question):
 
     # Solver
-    solver_answer = solve(question)
 
     print("\n--- SOLVER ---")
+
+    solver_answer = solve(question)
+
     print(solver_answer)
 
 
     # Verifier
+
+    print("\n--- VERIFIER ---")
+
     verification = verify(
         question,
         solver_answer
     )
 
-    print("\n--- VERIFIER ---")
-    print(verification)
+    print(f"Verdict:     {verification.verdict}")
+    print(f"Confidence:  {verification.confidence:.2f}")
+    print(f"Explanation: {verification.explanation}")
 
 
     # Critic
+
+    print("\n--- CRITIC ---")
+
     critique = criticize(
         question,
         solver_answer,
         verification
     )
 
-    print("\n--- CRITIC ---")
     print(critique)
 
 
     # Finalizer
+
+    print("\n--- FINAL ANSWER ---")
+
     final_answer = finalize(
         question,
         solver_answer,
@@ -238,14 +417,16 @@ def run_gemini_pipeline(question):
         critique
     )
 
-    print("\n--- FINAL ANSWER ---")
     print(final_answer)
 
 
-    # Return same structure as Mock Mode
+    # Return same structure as Mock Mode.
+    # "verifier" stays a human-readable string for API compatibility:
+    # it is the formatted VerifierResult.
+
     return {
         "solver": solver_answer,
-        "verifier": verification,
+        "verifier": _format_verifier(verification),
         "critic": critique,
         "final": final_answer
     }
