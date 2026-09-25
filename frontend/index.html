@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Double-Check</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f4f6f8;
+            color: #1f2937;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 60px auto;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #6b7280;
+            margin-bottom: 35px;
+        }
+
+        .card {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 150px;
+            padding: 15px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            resize: vertical;
+            font-size: 16px;
+            font-family: inherit;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #2563eb;
+        }
+
+        button {
+            margin-top: 15px;
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            background: #2563eb;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #1d4ed8;
+        }
+
+        button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        .status {
+            margin-top: 15px;
+            color: #6b7280;
+            text-align: center;
+        }
+
+        .result-section {
+            margin-top: 20px;
+        }
+
+        .result-box {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 10px;
+            white-space: pre-wrap;
+            line-height: 1.5;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .section-title {
+            margin-top: 0;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+
+        <h1>AI Double-Check</h1>
+
+        <p class="subtitle">
+            Multi-agent AI answer verification system
+        </p>
+
+        <div class="card">
+
+            <label for="question">Enter your question</label>
+
+            <textarea
+                id="question"
+                placeholder="Ask a question that you want the AI system to verify..."
+            ></textarea>
+
+            <button id="verifyButton">
+                Verify Answer
+            </button>
+
+            <div id="status" class="status"></div>
+
+        </div>
+
+        <div id="results" class="card hidden">
+
+            <h2 class="section-title">Verification Results</h2>
+
+            <div class="result-section">
+                <strong>Solver</strong>
+                <div id="solver" class="result-box"></div>
+            </div>
+
+            <div class="result-section">
+                <strong>Verifier</strong>
+                <div id="verifier" class="result-box"></div>
+            </div>
+
+            <div class="result-section">
+                <strong>Critic</strong>
+                <div id="critic" class="result-box"></div>
+            </div>
+
+            <div class="result-section">
+                <strong>Final Answer</strong>
+                <div id="final" class="result-box"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <script>
+        const verifyButton = document.getElementById("verifyButton");
+        const questionInput = document.getElementById("question");
+        const status = document.getElementById("status");
+        const results = document.getElementById("results");
+
+        const solver = document.getElementById("solver");
+        const verifier = document.getElementById("verifier");
+        const critic = document.getElementById("critic");
+        const finalAnswer = document.getElementById("final");
+
+        verifyButton.addEventListener("click", async () => {
+
+            const question = questionInput.value.trim();
+
+            if (!question) {
+                status.textContent = "Please enter a question.";
+                return;
+            }
+
+            verifyButton.disabled = true;
+            status.textContent = "Running verification pipeline...";
+            results.classList.add("hidden");
+
+            try {
+
+                const response = await fetch("http://127.0.0.1:8000/verify", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        question: question
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(
+                        data.detail || data.message || "Request failed."
+                    );
+                }
+
+                solver.textContent = data.solver || "No solver response.";
+                verifier.textContent = data.verifier || "No verifier response.";
+                critic.textContent = data.critic || "No critic response.";
+                finalAnswer.textContent = data.final || "No final answer.";
+
+                results.classList.remove("hidden");
+                status.textContent = "Verification complete.";
+
+            } catch (error) {
+
+                status.textContent = "Error: " + error.message;
+
+            } finally {
+
+                verifyButton.disabled = false;
+
+            }
+        });
+    </script>
+
+</body>
+</html>
