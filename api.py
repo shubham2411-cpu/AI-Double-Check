@@ -10,8 +10,11 @@ from pipeline import run_pipeline
 # ============================================================
 
 app = FastAPI(
-    title="AI Double-Check",
-    description="Multi-agent AI answer verification system",
+    title="Refinra",
+    description=(
+        "Refinra — multi-agent AI answer verification system. "
+        "Four-stage pipeline: Solver, Verifier, Critic, Finalizer."
+    ),
     version="1.0.0"
 )
 
@@ -32,7 +35,7 @@ class QuestionRequest(BaseModel):
 def home():
 
     return {
-        "message": "AI Double-Check API is running."
+        "message": "Refinra backend is running."
     }
 
 
