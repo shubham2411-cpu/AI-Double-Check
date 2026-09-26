@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="no-referrer">
+    <title>AI Double-Check · Verification Dashboard</title>
+
+    <style>
+        /* ============================================================
+           DESIGN TOKENS
+           ============================================================ */
+        :root {
+            --bg-0:        #0b1020;
+            --bg-1:        #0f172a;
+            --surface:     #111827;
+            --surface-2:   #0b1220;
+            --border:      #1f2937;
+            --border-soft: #1b2336;
+            --text:        #e5e7eb;
+            --text-dim:    #94a3b8;
+            --text-muted:  #64748b;
+            --accent:      #22d3ee;
+            --accent-dim:  #155e75;
+            --pass:        #10b981;
+            --pass-dim:    #064e3b;
+            --fail:        #ef4444;
+            --fail-dim:    #7f1d1d;
+            --warn:        #f59e0b;
+            --radius:      14px;
+            --radius-sm:   8px;
+            --shadow:      0 10px 30px rgba(0, 0, 0, 0.35);
+            --mono:        ui-monospace, "SF Mono", "JetBrains Mono",
+                           "Fira Code", Menlo, Consolas, monospace;
+            --sans:        system-ui, -apple-system, "Segoe UI", Roboto,
+                           "Helvetica Neue", Arial, sans-serif;
+        }
+
+        /* ============================================================
+           RESET / BASE
+           ============================================================ */
+        *,
+        *::before,
+        *::after { box-sizing: border-box; }
+
+        html, body { margin: 0; padding: 0; }
+
+        body {
+            font-family: var(--sans);
+            color: var(--text);
+            background:
+                radial-gradient(1200px 600px at 20% -10%,
+                    rgba(34, 211, 238, 0.08), transparent 60%),
+                radial-gradient(900px 500px at 100% 0%,
+                    rgba(99, 102, 241, 0.06), transparent 60%),
+                linear-gradient(180deg, var(--bg-0), var(--bg-1));
+            min-height: 100vh;
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        a { color: var(--accent); }
+
+        /* ============================================================
+           LAYOUT
+           ============================================================ */
+        .page {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 48px 24px 96px;
+        }
+
+        @media (max-width: 640px) {
+            .page { padding: 32px 16px 64px; }
+        }
+
+        /* ============================================================
+           HEADER
+           ============================================================ */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand-mark {
+            width: 36px;
+            height: 36px;
+            display: grid;
+            place-items: center;
+            border-radius: 10px;
+            background: linear-gradient(135deg,
+                rgba(34, 211, 238, 0.20),
+                rgba(99, 102, 241, 0.20));
+            border: 1px solid var(--border);
+            color: var(--accent);
+        }
+
+        .brand-text h1 {
+            margin: 0;
+            font-size: 1.15rem;
+            letter-spacing: 0.02em;
+            font-weight: 600;
+        }
+
+        .brand-text p {
+            margin: 0;
+            font-size: 0.8rem;
+            color: var(--text-dim);
+        }
+
+        .version-pill {
+            font-family: var(--mono);
+            font-size: 0.72rem;
+            color: var(--text-dim);
+            border: 1px solid var(--border);
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        /* ============================================================
+           CARDS
+           ============================================================ */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 24px;
+        }
+
+        .card + .card { margin-top: 20px; }
+
+        .card-title {
+            margin: 0 0 4px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--text-dim);
+        }
+
+        .card-subtitle {
+            margin: 0 0 18px;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        /* ============================================================
+           QUERY FORM
+           ============================================================ */
+        label[for="question"] {
+            display: block;
+            font-size: 0.78rem;
+            font-weight: 600;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            margin-bottom: 10px;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 130px;
+            padding: 14px 16px;
+            background: var(--surface-2);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            resize: vertical;
+            font-family: var(--sans);
+            font-size: 1rem;
+            line-height: 1.55;
+            transition: border-color 120ms ease,
+                        box-shadow   120ms ease;
+        }
+
+        textarea::placeholder { color: var(--text-muted); }
+
+        textarea:focus {
+            outline: none;
+            border-color: var(--accent-dim);
+            box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.15);
+        }
+
+        .form-actions {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-top: 16px;
+            flex-wrap: wrap;
+        }
+
+        .hint {
+            color: var(--text-muted);
+            font-size: 0.82rem;
+        }
+
+        .hint kbd {
+            font-family: var(--mono);
+            font-size: 0.72rem;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 1px 6px;
+            color: var(--text-dim);
+        }
+
+        button.primary {
+            appearance: none;
+            border: 1px solid transparent;
+            border-radius: var(--radius-sm);
+            padding: 12px 22px;
+            font: inherit;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            color: #06121a;
+            background: linear-gradient(180deg, #67e8f9, #22d3ee);
+            cursor: pointer;
+            transition: transform 80ms ease,
+                        box-shadow 120ms ease,
+                        filter    120ms ease;
+            box-shadow: 0 6px 20px rgba(34, 211, 238, 0.25);
+            position: relative;
+            overflow: hidden;
+        }
+
+        button.primary:hover  { filter: brightness(1.05); }
+        button.primary:active { transform: translateY(1px); }
+        button.primary:disabled {
+            cursor: not-allowed;
+            filter: grayscale(0.4) brightness(0.9);
+            box-shadow: none;
+        }
+
+        /* Shimmer overlay while loading */
+        button.primary .shimmer {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(90deg,
+                transparent,
+                rgba(255, 255, 255, 0.45),
+                transparent);
+            transform: translateX(-100%);
+            animation: shimmer 1.4s infinite;
+        }
+
+        @keyframes shimmer {
+            to { transform: translateX(100%); }
+        }
+
+        .status {
+            margin-top: 14px;
+            min-height: 1.4em;
+            font-size: 0.9rem;
+            color: var(--text-dim);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status.error { color: var(--fail); }
+
+        /* ============================================================
+           PIPELINE STEPPER
+           ============================================================ */
+        .stepper {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-top: 18px;
+        }
+
+        @media (max-width: 520px) {
+            .stepper { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        .step {
+            position: relative;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 12px 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: border-color 200ms ease,
+                        background   200ms ease;
+        }
+
+        .step .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--border);
+            flex-shrink: 0;
+            transition: background 200ms ease,
+                        box-shadow 200ms ease;
+        }
+
+        .step .label {
+            font-size: 0.82rem;
+            color: var(--text-dim);
+            font-weight: 500;
+            letter-spacing: 0.02em;
+        }
+
+        .step.active {
+            border-color: var(--accent-dim);
+            background: rgba(34, 211, 238, 0.06);
+        }
+
+        .step.active .dot {
+            background: var(--accent);
+            box-shadow: 0 0 0 4px rgba(34, 211, 238, 0.15);
+            animation: pulse 1.2s ease-in-out infinite;
+        }
+
+        .step.done .dot {
+            background: var(--accent);
+            box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.10);
+        }
+
+        .step.done .label { color: var(--text); }
+
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 0 4px rgba(34, 211, 238, 0.15); }
+            50%      { box-shadow: 0 0 0 8px rgba(34, 211, 238, 0.02); }
+        }
+
+        /* Top-of-card progress bar */
+        .progress {
+            position: relative;
+            height: 2px;
+            background: transparent;
+            margin: -24px -24px 18px;
+            border-top-left-radius: var(--radius);
+            border-top-right-radius: var(--radius);
+            overflow: hidden;
+        }
+
+        .progress::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            width: 35%;
+            background: linear-gradient(90deg,
+                transparent, var(--accent), transparent);
+            transform: translateX(-100%);
+            animation: indeterminate 1.6s ease-in-out infinite;
+        }
+
+        @keyframes indeterminate {
+            0%   { transform: translateX(-100%); }
+            100% { transform: translateX(360%); }
+        }
+
+        /* ============================================================
+           RESULTS
+           ============================================================ */
+        .results[hidden] { display: none; }
+
+        /* FINAL ANSWER — primary result */
+        .final-card {
+            position: relative;
+            border-left: 3px solid var(--accent);
+        }
+
+        .final-card.verdict-pass { border-left-color: var(--pass); }
+        .final-card.verdict-fail { border-left-color: var(--fail); }
+
+        .final-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .final-header h3 {
+            margin: 0;
+            font-size: 0.78rem;
+            font-weight: 600;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--text-dim);
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-family: var(--mono);
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            padding: 4px 10px;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            background: var(--surface-2);
+            color: var(--text-dim);
+        }
+
+        .badge.pass {
+            color: var(--pass);
+            border-color: var(--pass-dim);
+            background: rgba(16, 185, 129, 0.08);
+        }
+        .badge.fail {
+            color: var(--fail);
+            border-color: var(--fail-dim);
+            background: rgba(239, 68, 68, 0.08);
+        }
+        .badge .dot {
+            width: 6px; height: 6px; border-radius: 50%;
+            background: currentColor;
+        }
+
+        .final-body {
+            font-size: 1.05rem;
+            line-height: 1.65;
+            color: var(--text);
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .confidence {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 14px;
+            font-family: var(--mono);
+            font-size: 0.78rem;
+            color: var(--text-dim);
+        }
+
+        .confidence .bar {
+            flex: 1;
+            height: 4px;
+            background: var(--surface-2);
+            border: 1px solid var(--border-soft);
+            border-radius: 999px;
+            overflow: hidden;
+            max-width: 240px;
+        }
+
+        .confidence .bar > span {
+            display: block;
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent), #818cf8);
+            width: 0%;
+            transition: width 600ms ease;
+        }
+
+        .confidence.fail .bar > span {
+            background: linear-gradient(90deg, var(--fail), #f97316);
+        }
+
+        /* STAGE CARDS */
+        .stage {
+            margin-top: 20px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+
+        .stage summary {
+            list-style: none;
+            cursor: pointer;
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            user-select: none;
+        }
+
+        .stage summary::-webkit-details-marker { display: none; }
+
+        .stage summary .left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .stage summary .step-num {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            font-family: var(--mono);
+            font-size: 0.72rem;
+            display: grid;
+            place-items: center;
+        }
+
+        .stage summary .name {
+            font-size: 0.78rem;
+            font-weight: 600;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--text-dim);
+        }
+
+        .stage summary .chev {
+            color: var(--text-muted);
+            transition: transform 150ms ease;
+        }
+        .stage[open] summary .chev { transform: rotate(180deg); }
+
+        .stage .body {
+            padding: 0 20px 20px;
+            border-top: 1px solid var(--border-soft);
+        }
+
+        .stage pre {
+            margin: 16px 0 0;
+            padding: 14px 16px;
+            background: var(--surface-2);
+            border: 1px solid var(--border-soft);
+            border-radius: var(--radius-sm);
+            color: var(--text);
+            font-family: var(--mono);
+            font-size: 0.88rem;
+            line-height: 1.55;
+            white-space: pre-wrap;
+            word-break: break-word;
+            max-height: 320px;
+            overflow: auto;
+        }
+
+        /* ============================================================
+           SKELETON
+           ============================================================ */
+        .skeleton {
+            background: linear-gradient(90deg,
+                var(--surface-2) 0%,
+                rgba(255,255,255,0.04) 50%,
+                var(--surface-2) 100%);
+            background-size: 200% 100%;
+            animation: skel 1.4s ease-in-out infinite;
+            border-radius: 6px;
+            height: 14px;
+        }
+
+        .skeleton.lg { height: 22px; width: 70%; }
+        .skeleton.mt { margin-top: 10px; }
+        .skeleton.w90 { width: 90%; }
+        .skeleton.w60 { width: 60%; }
+        .skeleton.w40 { width: 40%; }
+
+        @keyframes skel {
+            0%   { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        /* ============================================================
+           ERROR CARD
+           ============================================================ */
+        .error-card {
+            border-left: 3px solid var(--fail);
+        }
+
+        .error-card .error-title {
+            color: var(--fail);
+            font-weight: 600;
+            margin: 0 0 6px;
+        }
+
+        .error-card pre {
+            margin: 8px 0 0;
+            padding: 12px 14px;
+            background: var(--surface-2);
+            border: 1px solid var(--border-soft);
+            border-radius: var(--radius-sm);
+            color: var(--text);
+            font-family: var(--mono);
+            font-size: 0.85rem;
+            white-space: pre-wrap;
+        }
+
+        /* ============================================================
+           UTILITY
+           ============================================================ */
+        .sr-only {
+            position: absolute;
+            width: 1px; height: 1px;
+            padding: 0; margin: -1px;
+            overflow: hidden;
+            clip: rect(0,0,0,0);
+            white-space: nowrap;
+            border: 0;
+        }
+    </style>
+</head>
+
+<body>
+
+    <main class="page">
+
+        <!-- ===================== HEADER ===================== -->
+        <header class="header">
+            <div class="brand">
+                <div class="brand-mark" aria-hidden="true">
+                    <!-- Inline shield / verify mark -->
+                    <svg width="20" height="20" viewBox="0 0 24 24"
+                         fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round"
+                         stroke-linejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        <path d="M9 12l2 2 4-4"/>
+                    </svg>
+                </div>
+                <div class="brand-text">
+                    <h1>AI Double-Check</h1>
+                    <p>Multi-agent answer verification dashboard</p>
+                </div>
+            </div>
+            <span class="version-pill">v1.0</span>
+        </header>
+
+        <!-- ===================== QUERY ===================== -->
+        <section class="card" aria-labelledby="query-title">
+            <h2 id="query-title" class="card-title">Query</h2>
+            <p class="card-subtitle">
+                Submit a question. The system will solve it, verify it,
+                critique the verification, then finalize the answer.
+            </p>
+
+            <label for="question">Your question</label>
+            <textarea id="question"
+                placeholder="e.g. What is 17 × 24? Explain your reasoning."
+                autocomplete="off"
+                spellcheck="true"></textarea>
+
+            <div class="form-actions">
+                <span class="hint">
+                    Press <kbd>Ctrl</kbd>+<kbd>Enter</kbd> to verify
+                </span>
+                <button id="verifyButton" class="primary" type="button">
+                    <span id="verifyButtonLabel">Verify Answer</span>
+                    <span class="shimmer" aria-hidden="true"></span>
+                </button>
+            </div>
+
+            <div id="status" class="status" role="status" aria-live="polite"></div>
+
+            <!-- Pipeline stepper -->
+            <div class="stepper" id="stepper" aria-label="Verification pipeline">
+                <div class="step" data-step="solver">
+                    <span class="dot"></span>
+                    <span class="label">1 · Solver</span>
+                </div>
+                <div class="step" data-step="verifier">
+                    <span class="dot"></span>
+                    <span class="label">2 · Verifier</span>
+                </div>
+                <div class="step" data-step="critic">
+                    <span class="dot"></span>
+                    <span class="label">3 · Critic</span>
+                </div>
+                <div class="step" data-step="final">
+                    <span class="dot"></span>
+                    <span class="label">4 · Final</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===================== RESULTS ===================== -->
+        <section id="results" class="results" hidden>
+
+            <!-- Loading skeleton (shown until response arrives) -->
+            <div id="resultsLoading" class="card">
+                <div class="progress" aria-hidden="true"></div>
+                <h3 class="card-title">Final Answer</h3>
+                <p class="card-subtitle">Running 4-stage verification…</p>
+                <div class="skeleton lg"></div>
+                <div class="skeleton mt w90"></div>
+                <div class="skeleton mt w60"></div>
+            </div>
+
+            <!-- Final answer (primary result) -->
+            <article id="finalCard" class="card final-card" hidden>
+                <h3 class="card-title">Final Answer</h3>
+                <div class="final-header">
+                    <span id="verdictBadge" class="badge">
+                        <span class="dot"></span>
+                        <span id="verdictBadgeText">—</span>
+                    </span>
+                </div>
+                <div id="finalBody" class="final-body"></div>
+                <div id="confidenceRow" class="confidence" hidden>
+                    <span>Confidence</span>
+                    <div class="bar"><span id="confidenceFill"></span></div>
+                    <span id="confidenceValue">—</span>
+                </div>
+            </article>
+
+            <!-- Stage cards (collapsible) -->
+            <details class="stage" data-stage="solver" open>
+                <summary>
+                    <span class="left">
+                        <span class="step-num">1</span>
+                        <span class="name">Solver</span>
+                    </span>
+                    <svg class="chev" width="16" height="16"
+                         viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2"
+                         stroke-linecap="round" stroke-linejoin="round"
+                         aria-hidden="true">
+                        <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                </summary>
+                <div class="body">
+                    <pre id="solverBody"></pre>
+                </div>
+            </details>
+
+            <details class="stage" data-stage="verifier">
+                <summary>
+                    <span class="left">
+                        <span class="step-num">2</span>
+                        <span class="name">Verifier</span>
+                    </span>
+                    <svg class="chev" width="16" height="16"
+                         viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2"
+                         stroke-linecap="round" stroke-linejoin="round"
+                         aria-hidden="true">
+                        <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                </summary>
+                <div class="body">
+                    <pre id="verifierBody"></pre>
+                </div>
+            </details>
+
+            <details class="stage" data-stage="critic">
+                <summary>
+                    <span class="left">
+                        <span class="step-num">3</span>
+                        <span class="name">Critic</span>
+                    </span>
+                    <svg class="chev" width="16" height="16"
+                         viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2"
+                         stroke-linecap="round" stroke-linejoin="round"
+                         aria-hidden="true">
+                        <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                </summary>
+                <div class="body">
+                    <pre id="criticBody"></pre>
+                </div>
+            </details>
+
+        </section>
+
+        <!-- ===================== ERROR ===================== -->
+        <section id="errorCard" class="card error-card" hidden>
+            <p class="error-title" id="errorTitle">Request failed</p>
+            <p class="card-subtitle" id="errorMessage"></p>
+            <pre id="errorDetail" hidden></pre>
+        </section>
+
+    </main>
+
+    <script>
+        "use strict";
+
+        // ----- DOM refs -----
+        const $ = (id) => document.getElementById(id);
+
+        const questionEl     = $("question");
+        const verifyButton   = $("verifyButton");
+        const verifyLabel    = $("verifyButtonLabel");
+        const statusEl       = $("status");
+        const resultsEl      = $("results");
+        const resultsLoading = $("resultsLoading");
+        const finalCard      = $("finalCard");
+        const finalBody      = $("finalBody");
+        const verdictBadge   = $("verdictBadge");
+        const verdictBadgeTx = $("verdictBadgeText");
+        const confidenceRow  = $("confidenceRow");
+        const confidenceFill = $("confidenceFill");
+        const confidenceVal  = $("confidenceValue");
+        const solverBody     = $("solverBody");
+        const verifierBody   = $("verifierBody");
+        const criticBody     = $("criticBody");
+        const errorCard      = $("errorCard");
+        const errorTitle     = $("errorTitle");
+        const errorMessage   = $("errorMessage");
+        const errorDetail    = $("errorDetail");
+        const stepperEl      = $("stepper");
+
+        const STAGES = ["solver", "verifier", "critic", "final"];
+
+        // ----- Helpers -----
+
+        /**
+         * Try to parse the verifier block (formatted by the backend as
+         * "Verdict: PASS|FAIL\nConfidence: 0.xx\nExplanation: ...").
+         * Used ONLY for visual treatment. Returns null if it can't parse.
+         */
+        function parseVerifierBlock(text) {
+            if (!text || typeof text !== "string") return null;
+            const verdictM    = text.match(/Verdict:\s*(PASS|FAIL)/i);
+            const confidenceM = text.match(/Confidence:\s*([0-9.]+)/i);
+            const explM       = text.match(/Explanation:\s*([\s\S]+)$/i);
+            if (!verdictM && !confidenceM && !explM) return null;
+            const confidence = confidenceM
+                ? parseFloat(confidenceM[1])
+                : null;
+            return {
+                verdict:     verdictM    ? verdictM[1].toUpperCase()    : null,
+                confidence:  Number.isFinite(confidence) ? confidence    : null,
+                explanation: explM       ? explM[1].trim()              : null,
+            };
+        }
+
+        function setStatus(text, isError) {
+            statusEl.textContent = text || "";
+            statusEl.classList.toggle("error", !!isError);
+        }
+
+        function setLoading(isLoading) {
+            verifyButton.disabled = isLoading;
+            verifyLabel.textContent = isLoading
+                ? "Running 4-stage verification…"
+                : "Verify Answer";
+            // Reset / advance the stepper
+            STAGES.forEach((s, i) => {
+                const el = stepperEl.querySelector('[data-step="' + s + '"]');
+                el.classList.remove("active", "done");
+                if (isLoading) el.classList.add("active");
+            });
+        }
+
+        function showResultsLoading() {
+            resultsEl.hidden = false;
+            resultsLoading.hidden = false;
+            finalCard.hidden = true;
+            errorCard.hidden = true;
+        }
+
+        function showError(title, message, detail) {
+            resultsEl.hidden = true;
+            errorCard.hidden = false;
+            errorTitle.textContent = title;
+            errorMessage.textContent = message || "";
+            if (detail) {
+                errorDetail.hidden = false;
+                errorDetail.textContent = detail;
+            } else {
+                errorDetail.hidden = true;
+                errorDetail.textContent = "";
+            }
+        }
+
+        function fillStage(stepName) {
+            const el = stepperEl.querySelector(
+                '[data-step="' + stepName + '"]');
+            if (el) {
+                el.classList.remove("active");
+                el.classList.add("done");
+            }
+        }
+
+        function renderResults(data) {
+            // Hide skeleton, show real result card.
+            resultsLoading.hidden = true;
+            finalCard.hidden = false;
+
+            // Fill stage bodies.
+            solverBody.textContent   = data.solver   || "(no solver response)";
+            verifierBody.textContent = data.verifier || "(no verifier response)";
+            criticBody.textContent   = data.critic   || "(no critic response)";
+            finalBody.textContent    = data.final    || "(no final answer)";
+
+            // Verdict badge + confidence bar from the verifier block.
+            const parsed = parseVerifierBlock(data.verifier);
+
+            // Reset verdict classes.
+            finalCard.classList.remove("verdict-pass", "verdict-fail");
+            verdictBadge.classList.remove("pass", "fail");
+
+            if (parsed && parsed.verdict) {
+                const isPass = parsed.verdict === "PASS";
+                verdictBadgeTx.textContent = isPass ? "PASS" : "FAIL";
+                verdictBadge.classList.add(isPass ? "pass" : "fail");
+                finalCard.classList.add(isPass ? "verdict-pass" : "verdict-fail");
+                confidenceRow.classList.toggle("fail", !isPass);
+                confidenceRow.hidden = false;
+                if (parsed.confidence !== null) {
+                    const pct = Math.max(0, Math.min(1, parsed.confidence));
+                    // Defer to next frame so the CSS transition fires.
+                    requestAnimationFrame(() => {
+                        confidenceFill.style.width = (pct * 100).toFixed(0) + "%";
+                    });
+                    confidenceVal.textContent = pct.toFixed(2);
+                } else {
+                    confidenceFill.style.width = "0%";
+                    confidenceVal.textContent = "—";
+                }
+            } else {
+                verdictBadgeTx.textContent = "VERIFIED";
+                confidenceRow.hidden = true;
+            }
+
+            // Stepper progression — light up all four.
+            STAGES.forEach(fillStage);
+
+            setStatus("Verification complete.");
+        }
+
+        // ----- Wire up -----
+
+        verifyButton.addEventListener("click", runVerification);
+
+        questionEl.addEventListener("keydown", (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+                e.preventDefault();
+                runVerification();
+            }
+        });
+
+        async function runVerification() {
+            const question = questionEl.value.trim();
+
+            if (!question) {
+                setStatus("Please enter a question.", true);
+                questionEl.focus();
+                return;
+            }
+
+            setLoading(true);
+            showResultsLoading();
+            setStatus("Running 4-stage verification…", false);
+            errorCard.hidden = true;
+
+            try {
+                const response = await fetch("/verify", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ question: question })
+                });
+
+                const data = await response.json().catch(() => ({}));
+
+                if (!response.ok) {
+                    const title = (data && data.error)
+                        ? data.error.replace(/_/g, " ")
+                        : "Request failed";
+                    const message = (data && data.detail)
+                        ? data.detail
+                        : "The verification pipeline returned an error.";
+                    showError(
+                        title.charAt(0).toUpperCase() + title.slice(1),
+                        message,
+                        JSON.stringify(data, null, 2)
+                    );
+                    setStatus("Verification failed.", true);
+                    return;
+                }
+
+                renderResults(data);
+            } catch (err) {
+                showError(
+                    "Network error",
+                    "Could not reach the verification API.",
+                    String(err && err.message ? err.message : err)
+                );
+                setStatus("Verification failed.", true);
+            } finally {
+                setLoading(false);
+            }
+        }
+    </script>
+
+</body>
+</html>
