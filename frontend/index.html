@@ -839,16 +839,29 @@
             statusEl.classList.toggle("error", !!isError);
         }
 
+        function resetStepper() {
+            STAGES.forEach((s) => {
+                const el = stepperEl.querySelector(
+                    '[data-step="' + s + '"]');
+                if (el) el.classList.remove("active", "done");
+            });
+        }
+
         function setLoading(isLoading) {
             verifyButton.disabled = isLoading;
             verifyLabel.textContent = isLoading
                 ? "Running 4-stage verification…"
                 : "Verify Answer";
-            // Reset / advance the stepper
-            STAGES.forEach((s, i) => {
-                const el = stepperEl.querySelector('[data-step="' + s + '"]');
-                el.classList.remove("active", "done");
-                if (isLoading) el.classList.add("active");
+            // The stepper is reset at the START of a run (see
+            // runVerification), not in this finally-block helper,
+            // otherwise we would wipe the "done" markers that
+            // renderResults() just set on success.
+            if (isLoading) resetStepper();
+        }
+
+        function setStageCardsVisible(visible) {
+            document.querySelectorAll(".stage").forEach((el) => {
+                el.hidden = !visible;
             });
         }
 
@@ -857,6 +870,9 @@
             resultsLoading.hidden = false;
             finalCard.hidden = true;
             errorCard.hidden = true;
+            // Hide the three stage cards so a previous run's content
+            // does not sit above the loading skeleton.
+            setStageCardsVisible(false);
         }
 
         function showError(title, message, detail) {
@@ -886,6 +902,8 @@
             // Hide skeleton, show real result card.
             resultsLoading.hidden = true;
             finalCard.hidden = false;
+            // Re-show the three stage cards for this run.
+            setStageCardsVisible(true);
 
             // Fill stage bodies.
             solverBody.textContent   = data.solver   || "(no solver response)";
