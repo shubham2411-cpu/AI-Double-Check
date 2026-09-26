@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from pipeline import run_pipeline
@@ -25,6 +26,17 @@ app = FastAPI(
 
 class QuestionRequest(BaseModel):
     question: str
+
+
+# ============================================================
+# STATIC FRONTEND
+# ============================================================
+
+app.mount(
+    "/app",
+    StaticFiles(directory="frontend", html=True),
+    name="frontend"
+)
 
 
 # ============================================================
