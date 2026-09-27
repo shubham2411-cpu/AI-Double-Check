@@ -654,7 +654,7 @@
                     Press <kbd>Ctrl</kbd>+<kbd>Enter</kbd> to verify
                 </span>
                 <button id="verifyButton" class="primary" type="button">
-                    <span id="verifyButtonLabel">Verify Answer</span>
+                    <span id="verifyButtonLabel">Run Refinra</span>
                     <span class="shimmer" aria-hidden="true"></span>
                 </button>
             </div>
@@ -851,7 +851,7 @@
             verifyButton.disabled = isLoading;
             verifyLabel.textContent = isLoading
                 ? "Running 4-stage verification…"
-                : "Verify Answer";
+                : "Run Refinra";
             // The stepper is reset at the START of a run (see
             // runVerification), not in this finally-block helper,
             // otherwise we would wipe the "done" markers that
