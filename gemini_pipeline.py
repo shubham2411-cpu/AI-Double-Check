@@ -47,6 +47,15 @@ def ask_gemini(prompt):
         except Exception as e:
 
             error_text = str(e)
+            normalized_error = error_text.upper()
+
+            if (
+                "429" in error_text
+                or "RESOURCE_EXHAUSTED" in normalized_error
+                or "RATE LIMIT" in normalized_error
+                or "RATE-LIMIT" in normalized_error
+            ):
+                raise
 
             if "503" in error_text:
 
@@ -57,7 +66,7 @@ def ask_gemini(prompt):
                         f"Retrying... ({attempt + 1}/3)"
                     )
 
-                    time.sleep(2)
+                    time.sleep(2 ** (attempt + 1))
 
                     continue
 
