@@ -6,32 +6,21 @@ from pydantic import BaseModel
 from pipeline import run_pipeline
 
 
-# ============================================================
-# FASTAPI APPLICATION
-# ============================================================
-
 app = FastAPI(
     title="Refinra",
     description=(
-        "Refinra — multi-agent AI answer verification system. "
+        "Refinra - multi-agent AI answer verification system. "
         "Four-stage pipeline: Solver, Verifier, Critic, Finalizer."
     ),
     version="1.0.0"
 )
 
 
-# ============================================================
-# REQUEST MODEL
-# ============================================================
-
 class QuestionRequest(BaseModel):
     question: str
 
 
-# ============================================================
-# STATIC FRONTEND
-# ============================================================
-
+# Serve frontend
 app.mount(
     "/app",
     StaticFiles(directory="frontend", html=True),
@@ -39,44 +28,26 @@ app.mount(
 )
 
 
-# ============================================================
-# HOME ROUTE
-# ============================================================
-
 @app.get("/")
 def home():
-
     return {
-        "message": "Refinra backend is running."
+        "message": "Refinra backend is running.",
+        "frontend": "/app"
     }
 
-
-# ============================================================
-# HEALTH CHECK
-# ============================================================
 
 @app.get("/health")
 def health():
+    return {"status": "ok"}
 
-    return {
-        "status": "ok"
-    }
-
-
-# ============================================================
-# VERIFY QUESTION
-# ============================================================
 
 @app.post("/verify")
 def verify_question(request: QuestionRequest):
-
     try:
         result = run_pipeline(request.question)
-
         return result
 
     except Exception as e:
-
         error_message = str(e)
 
         if (
@@ -84,7 +55,6 @@ def verify_question(request: QuestionRequest):
             or "RESOURCE_EXHAUSTED" in error_message.upper()
             or "rate limit" in error_message.lower()
         ):
-
             return JSONResponse(
                 status_code=429,
                 content={
